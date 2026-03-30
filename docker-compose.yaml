@@ -1,19 +1,97 @@
 version: "3"
 
 services:
-  rabbitmq:
-    image: rabbitmq:management-alpine
-    tty: true
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq # Persistent volume for RabbitMQ data
+  emqx1:
+    image: emqx:latest
     environment:
-      RABBITMQ_DEFAULT_USER: "mikelopster" # Set default RabbitMQ user
-      RABBITMQ_DEFAULT_PASS: "password" # Set default RabbitMQ password
+    - "EMQX_NODE__NAME=emqx@node1.emqx.io"
+    - "EMQX_CLUSTER__DISCOVERY_STRATEGY=static"
+    - "EMQX_CLUSTER__STATIC__SEEDS=[emqx@node1.emqx.io, emqx@node2.emqx.io]"
+    networks:
+      emqx-bridge:
+        aliases:
+        - node1.emqx.io
     ports:
-      - "15672:15672"
-      - "5672:5672"
-      - "1883:1883"
+      - "1883:1883"    # MQTT Port สำหรับ Node 1
+      - "18083:18083"  # Dashboard สำหรับ Node 1 (เข้าผ่านอันนี้)
+    volumes:
+      - emqx1-data:/opt/emqx/data
+      - emqx1-log:/opt/emqx/log
+
+  emqx2:
+    image: emqx:latest
+    environment:
+    - "EMQX_NODE__NAME=emqx@node2.emqx.io"
+    - "EMQX_CLUSTER__DISCOVERY_STRATEGY=static"
+    - "EMQX_CLUSTER__STATIC__SEEDS=[emqx@node1.emqx.io, emqx@node2.emqx.io]"
+    networks:
+      emqx-bridge:
+        aliases:
+        - node2.emqx.io
+    ports:
+      - "1884:1883"    # MQTT Port สำหรับ Node 2 (เลี่ยงพอร์ตไม่ให้ชนกัน)
+      - "18084:18083"  # Dashboard สำหรับ Node 2
+    volumes:
+      - emqx2-data:/opt/emqx/data
+      - emqx2-log:/opt/emqx/log
+  
+  # 2. TimescaleDB (PostgreSQL + Time-series)
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: timescaledb
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_PASSWORD=password123
+
+  # 3. Kafka (Using Bitnami Image - No Zookeeper needed with KRaft)
+  kafka:
+    image: bitnami/kafka:3.7
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@localhost:9093
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+
+  # 4. Kafka UI (เพื่อดูข้อมูลใน Kafka ได้ง่ายขึ้น)
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8080:8080"
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+
+networks:
+  emqx-bridge:
+    driver: bridge
 
 volumes:
-  rabbitmq_data:
-    driver: local
+  emqx1-data:
+  emqx1-log:
+  emqx2-data:
+  emqx2-log:
+
+# services:
+#   rabbitmq:
+#     image: rabbitmq:management-alpine
+#     tty: true
+#     volumes:
+#       - rabbitmq_data:/var/lib/rabbitmq # Persistent volume for RabbitMQ data
+#     environment:
+#       RABBITMQ_DEFAULT_USER: "mikelopster" # Set default RabbitMQ user
+#       RABBITMQ_DEFAULT_PASS: "password" # Set default RabbitMQ password
+#     ports:
+#       - "15672:15672"
+#       - "5672:5672"
+#       - "1883:1883"
+
+# volumes:
+#   rabbitmq_data:
+#     driver: local
