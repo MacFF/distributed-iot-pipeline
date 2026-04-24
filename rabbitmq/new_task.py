@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import pika, json, sys
 
-credentials = pika.PlainCredentials("mikelopster", "password")
+credentials = pika.PlainCredentials("guest", "guest")
 parameters = pika.ConnectionParameters(
     host="localhost", port=5672, credentials=credentials
 )

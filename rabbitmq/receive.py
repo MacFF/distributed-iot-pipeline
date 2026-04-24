@@ -3,7 +3,7 @@ import pika, sys, os, json
 
 
 def main():
-    credentials = pika.PlainCredentials("mikelopster", "password")
+    credentials = pika.PlainCredentials("guest", "guest")
     parameters = pika.ConnectionParameters(host="localhost", port=5672, credentials=credentials)
 
     connection = pika.BlockingConnection(parameters)

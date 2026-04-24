@@ -45,35 +45,63 @@ services:
       - emqx2-data:/opt/emqx/data
       - emqx2-log:/opt/emqx/log
     
-  kafka:
-    image: apache/kafka:4.2.0
-    container_name: broker
-    ports:
-      - 9092:9092 # เปิด port ให้เครื่อง Mac เข้าได้
-    environment:
-      KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: broker,controller
-      # แก้ไข: เพิ่ม INTERNAL listener
-      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-      # แก้ไข: ระบุ address ที่แต่ละฝั่งจะเรียก
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://broker:29092,EXTERNAL://localhost:9092
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+  # kafka:
+  #   image: apache/kafka:4.2.0
+  #   container_name: broker
+  #   ports:
+  #     - 9092:9092 # เปิด port ให้เครื่อง Mac เข้าได้
+  #   environment:
+  #     KAFKA_NODE_ID: 1
+  #     KAFKA_PROCESS_ROLES: broker,controller
+  #     # แก้ไข: เพิ่ม INTERNAL listener
+  #     KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+  #     # แก้ไข: ระบุ address ที่แต่ละฝั่งจะเรียก
+  #     KAFKA_ADVERTISED_LISTENERS: INTERNAL://broker:29092,EXTERNAL://localhost:9092
+  #     KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+  #     KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+  #     KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+  #     KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+  #     KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+  #     KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
 
-  kafka-ui:
-    image: provectuslabs/kafka-ui:latest
-    container_name: kafka-ui
+  # kafka-ui:
+  #   image: provectuslabs/kafka-ui:latest
+  #   container_name: kafka-ui
+  #   ports:
+  #     - 8888:8080 # เลี่ยง port 8080 ถ้าคุณรัน Go/Django อยู่
+  #   environment:
+  #     # แก้ไข: เชื่อมต่อไปยังชื่อ service 'broker' และ port ภายใน '29092'
+  #     KAFKA_CLUSTERS_0_NAME: local
+  #     KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: broker:29092
+  #     DYNAMIC_CONFIG_ENABLED: 'true'
+
+  rabbitmq:
+    image: rabbitmq:4.2.5-management-alpine
+    container_name: rabbitmq
+    hostname: rabbitmq
+    networks:
+      - emqx-bridge
     ports:
-      - 8888:8080 # เลี่ยง port 8080 ถ้าคุณรัน Go/Django อยู่
+      - "5672:5672"    # AMQP port
+      - "15672:15672"  # Management UI port
+      - "15671:15671"  # HTTPS management port
+      - "15674:15674"  # WebSocket port
     environment:
-      # แก้ไข: เชื่อมต่อไปยังชื่อ service 'broker' และ port ภายใน '29092'
-      KAFKA_CLUSTERS_0_NAME: local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: broker:29092
-      DYNAMIC_CONFIG_ENABLED: 'true'
+      RABBITMQ_DEFAULT_USER: "guest"
+      RABBITMQ_DEFAULT_PASS: "guest"
+      RABBITMQ_DEFAULT_VHOST: "/"
+      # Enable plugins
+      RABBITMQ_PLUGINS: rabbitmq_management rabbitmq_mqtt rabbitmq_web_stomp
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+      - rabbitmq-logs:/var/log/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
   
 #   # 2. TimescaleDB (PostgreSQL + Time-series)
 #   timescaledb:
@@ -122,21 +150,5 @@ volumes:
   emqx1-log:
   emqx2-data:
   emqx2-log:
-
-# services:
-#   rabbitmq:
-#     image: rabbitmq:management-alpine
-#     tty: true
-#     volumes:
-#       - rabbitmq_data:/var/lib/rabbitmq # Persistent volume for RabbitMQ data
-#     environment:
-#       RABBITMQ_DEFAULT_USER: "mikelopster" # Set default RabbitMQ user
-#       RABBITMQ_DEFAULT_PASS: "password" # Set default RabbitMQ password
-#     ports:
-#       - "15672:15672"
-#       - "5672:5672"
-#       - "1883:1883"
-
-# volumes:
-#   rabbitmq_data:
-#     driver: local
+  rabbitmq-data:
+  rabbitmq-logs:
